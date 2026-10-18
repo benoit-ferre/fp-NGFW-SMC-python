@@ -84,29 +84,48 @@ class GroupMixin(object):
         :param bool remove_members: remove members from the group
         :return: bool was modified or not
         """
-        if members:
-            elements = [element_resolver(element) for element in members]
-            if remove_members:
-                element = [e for e in self.members if e not in elements]
-                if set(element) == set(self.members):
-                    remove_members = element = False
-                append_lists = False
-            elif append_lists:
-                element = [e for e in elements if e not in self.members]
-            else:
-                element = list(set(elements))
+        # Group membership is unordered and a member can only occur once.
+        # Normalize requested and current member hrefs as sets before applying
+        # replacement, append, or removal semantics.
+        elements = {
+            element_resolver(member)
+            for member in members
+        }
+        current_members = set(self.members)
 
-            if element or remove_members:
-                self.update(element=element, append_lists=append_lists, **kwargs)
-                return True
-            elif kwargs is not None:
-                self.update(**kwargs)
-            return True
-        elif kwargs is not None:
-            self.update(**kwargs)
+        if remove_members:
+            target_members = current_members - elements
+            if target_members == current_members:
+                return False
+
+            self.update(
+                element=list(target_members),
+                append_lists=False,
+                **kwargs
+            )
             return True
 
-        return False
+        if append_lists:
+            missing_members = elements - current_members
+            if not missing_members:
+                return False
+
+            self.update(
+                element=list(missing_members),
+                append_lists=True,
+                **kwargs
+            )
+            return True
+
+        if elements == current_members:
+            return False
+
+        self.update(
+            element=list(elements),
+            append_lists=False,
+            **kwargs
+        )
+        return True
 
     def obtain_members(self) -> list[Any]:
         """
